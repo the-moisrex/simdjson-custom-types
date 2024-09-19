@@ -47,10 +47,9 @@ public:
   template <typename ...Args>
   constexpr explicit into(Args&&...args) noexcept(std::is_nothrow_constructible_v<tuple_type, Args...>)
    : eps(std::forward<Args>(args)...) {
-    std::array<std::string_view, sizeof...(EPs)> keys = {args.key()...};
     ([&, this]<std::size_t ...I>(std::index_sequence<I...>)  {
       (([&] (std::size_t const index) {
-        auto const ch_pos = keys[I].empty() ? 0 : static_cast<std::size_t>(keys[I][0]);
+        auto const ch_pos = get<I>(eps).key().empty() ? 0 : static_cast<std::size_t>(get<I>(eps).key()[0]);
         indices[ch_pos] |= 0b1 << index;
         callers[index] = &into::run<I>;
       })(I), ...);
