@@ -136,6 +136,14 @@ simdjson_inline bool raw_json_string::is_equal(const char* target) const noexcep
   return true;
 }
 
+simdjson_inline char raw_json_string::get_first_unescaped_char() const noexcept {
+  const char * r{raw()};
+  if (r[0] == '"') {
+    return '\0';
+  }
+  return r[0];
+}
+
 simdjson_unused simdjson_inline bool operator==(const raw_json_string &a, std::string_view c) noexcept {
   return a.unsafe_is_equal(c);
 }

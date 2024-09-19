@@ -18,8 +18,64 @@ namespace ondemand {
 
 #ifdef SIMDJSON_SUPPORTS_EXTRACT
 
+template <endpoint ...EPs>
+struct into {
+  using tuple_type = std::tuple<EPs...>;
+  static constexpr bool is_nothrow = (nothrow_endpoint<EPs> && ...);
+
+private:
+  using func_type = bool (into::*)(raw_json_string, simdjson_result<value>, error_code& error) noexcept(is_nothrow);
+  tuple_type eps;
+  std::array<std::uint8_t, 256U> indices{};
+  std::array<func_type, sizeof...(EPs)> callers{};
+
+  template <std::size_t Index>
+  [[nodiscard]] constexpr bool run(raw_json_string field_key, simdjson_result<value> value, error_code& error) noexcept(is_nothrow) {
+    if constexpr (Index >= sizeof...(EPs)) {
+      return false;
+    } else {
+      auto& ep = get<Index>(eps);
+      if (!field_key.unsafe_is_equal(ep.key())) {
+        return false;
+      }
+      error = ep(value);
+      return error == SUCCESS;
+    }
+  }
+public:
+
+  template <typename ...Args>
+  constexpr explicit into(Args&&...args) noexcept(std::is_nothrow_constructible_v<tuple_type, Args...>)
+   : eps(std::forward<Args>(args)...) {
+    std::array<std::string_view, sizeof...(EPs)> keys = {args.key()...};
+    ([&, this]<std::size_t ...I>(std::index_sequence<I...>)  {
+      (([&] (std::size_t const index) {
+        auto const ch_pos = keys[I].empty() ? 0 : static_cast<std::size_t>(keys[I][0]);
+        indices[ch_pos] |= 0b1 << index;
+        callers[index] = &into::run<I>;
+      })(I), ...);
+    })(std::make_index_sequence<sizeof...(Args)>());
+  }
+
+  constexpr void operator()(raw_json_string field_key, simdjson_result<value> val, error_code& error) noexcept(is_nothrow) {
+    auto const ch_pos = field_key.get_first_unescaped_char();
+
+    for (auto positions = indices[ch_pos]; positions != 0; ) {
+      auto const index = std::countr_zero(positions);
+      // don't need to check if the caller is nullptr or not, the positions would be 0 anyway
+      if ((this->*callers[index])(field_key, val, error)) {
+        break;
+      }
+      positions &= ~(0b1 << index);
+    }
+  }
+};
+
+template <typename ...EPs>
+into(EPs&&...) -> into<EPs...>;
+
 template <endpoint ...Funcs>
-simdjson_inline error_code object::extract(Funcs&&... endpoints)
+simdjson_inline error_code object::extract(into<Funcs...> endpoints)
 #ifndef _MSC_VER // msvc thinks noexcept is not the same in definition
  noexcept((nothrow_endpoint<Funcs> && ...))
 #endif
@@ -30,7 +86,8 @@ simdjson_inline error_code object::extract(Funcs&&... endpoints)
     if (error = pair.key().get(field_key); error) {
       break;
     }
-    std::ignore = ((field_key.unsafe_is_equal(endpoints.key()) ? (error = endpoints(pair.value())) == SUCCESS : true) && ...);
+    // std::ignore = ((field_key.unsafe_is_equal(endpoints.key()) ? (error = endpoints(pair.value())) == SUCCESS : true) && ...);
+    endpoints(field_key, pair.value(), error);
     if (error) {
       break;
     }
@@ -132,7 +189,7 @@ public:
       return err;
     }
     return std::apply([&obj]<typename... T>(T &&...app_tos) {
-      return obj.extract(std::forward<T>(app_tos)...);
+      return obj.extract(into{std::forward<T>(app_tos)...});
     }, tos);
   }
 };

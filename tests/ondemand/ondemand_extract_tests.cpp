@@ -17,6 +17,7 @@ struct Car {
   static simdjson_result<Car> create(auto& value) {
     using ondemand::to;
     using ondemand::sub;
+    using ondemand::into;
 
     simdjson::ondemand::object obj;
     auto error = value.get_object().get(obj);
@@ -49,7 +50,7 @@ struct Car {
     //     }
     //
     // we can do this now:
-    error = obj.extract(
+    error = obj.extract(into{
       to{"wheels", sub{
         to{"front", car.wheels.front},
         to{"back", car.wheels.back},
@@ -58,7 +59,7 @@ struct Car {
       to{"model", car.model},
       to{"year", [&car](auto val) {
         car.year = val;
-      }});
+      }}});
     if (error) {
       return error;
     }

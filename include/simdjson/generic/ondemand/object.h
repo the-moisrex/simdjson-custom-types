@@ -23,6 +23,9 @@ concept endpoint = std::is_invocable_r_v<error_code, T, simdjson_result<value>> 
 template <typename T>
 concept nothrow_endpoint = endpoint<T> && std::is_nothrow_invocable_r_v<error_code, T, simdjson_result<value>>;
 
+template <endpoint ...EPs>
+struct into;
+
 #endif
 
 /**
@@ -85,7 +88,7 @@ public:
    * Funcs are invocables that take a simdjson_result<value> as input.
    */
   template <endpoint ...Funcs>
-  simdjson_inline error_code extract(Funcs&&... endpoints)
+  simdjson_inline error_code extract(into<Funcs...> endpoints)
 #ifndef _MSC_VER // msvc thinks noexcept is not the same in definition
  noexcept((nothrow_endpoint<Funcs> && ...))
 #endif

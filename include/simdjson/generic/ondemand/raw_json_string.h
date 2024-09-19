@@ -125,6 +125,13 @@ public:
   static simdjson_inline bool is_free_from_unescaped_quote(std::string_view target) noexcept;
   static simdjson_inline bool is_free_from_unescaped_quote(const char* target) noexcept;
 
+
+  /**
+   * Get the first character; no escaping is done.
+   * @returns the first unescaped character, if it can't, it returns '\0'
+   */
+  simdjson_inline char get_first_unescaped_char() const noexcept;
+
 private:
 
 
